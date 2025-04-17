@@ -10,9 +10,18 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { useToast } from "@/components/ui/use-toast";
 import { supabase } from "@/lib/supabase";
 import { Database } from "@/lib/database.types";
-import { Clock, CalendarClock, Edit, ArrowRight, CheckCircle2, XCircle, Play, Loader2 } from "lucide-react";
+import { Clock, CalendarClock, Edit, CheckCircle2, XCircle, Play, Loader2, Plus, ClipboardList, Trash2 } from "lucide-react";
 import Link from "next/link";
 import { formatDistanceToNow, isPast, format } from "date-fns";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from "@/components/ui/dialog";
 
 type Task = Database["public"]["Tables"]["tasks"]["Row"] & {
   clients?: { name: string | null } | null;
@@ -25,6 +34,7 @@ export default function TasksPage() {
   const [clients, setClients] = useState<PartialClient[]>([]);
   const [loading, setLoading] = useState(true);
   const [actionLoading, setActionLoading] = useState(false);
+  const [isAddDialogOpen, setIsAddDialogOpen] = useState(false);
   const [newTask, setNewTask] = useState({
     title: "",
     description: "",
@@ -56,6 +66,7 @@ export default function TasksPage() {
   }
 
   async function fetchTasks() {
+    setLoading(true);
     try {
       const { data, error } = await supabase
         .from("tasks")
@@ -70,6 +81,7 @@ export default function TasksPage() {
       if (error) throw error;
       setTasks(data || []);
     } catch (error) {
+      console.error("Error fetching tasks:", error);
       toast({
         variant: "destructive",
         title: "Error fetching tasks",
@@ -86,8 +98,8 @@ export default function TasksPage() {
     if (!newTask.client_id) {
       toast({
         variant: "destructive",
-        title: "Please select a client",
-        description: "A client must be selected to create a task.",
+        title: "Client is required",
+        description: "Please select a client for this task.",
       });
       return;
     }
@@ -116,16 +128,19 @@ export default function TasksPage() {
         return;
       }
 
-      const { data, error } = await supabase.from("tasks").insert({
-        title: newTask.title,
-        description: newTask.description,
-        client_id: newTask.client_id,
-        timer_end: newTask.deadline || null, // Use timer_end instead of deadline
-        status: newTask.status,
-      }).select();
+      const { data, error } = await supabase
+        .from("tasks")
+        .insert({
+          title: newTask.title,
+          description: newTask.description,
+          client_id: newTask.client_id,
+          timer_end: newTask.deadline || null,
+          status: newTask.status,
+        })
+        .select();
 
       if (error) {
-        console.error("Supabase error details:", {
+        console.error("Supabase error:", {
           message: error.message,
           details: error.details,
           hint: error.hint,
@@ -147,40 +162,13 @@ export default function TasksPage() {
         deadline: "",
         status: "pending"
       });
+      setIsAddDialogOpen(false); // Close dialog
       fetchTasks();
     } catch (error) {
       console.error("Error adding task - full error:", error);
       toast({
         variant: "destructive",
         title: "Error adding task",
-        description: "Please check the console for details.",
-      });
-    } finally {
-      setActionLoading(false);
-    }
-  }
-
-  async function handleStartTimer(taskId: string) {
-    setActionLoading(true);
-    try {
-      const { error } = await supabase
-        .from("tasks")
-        .update({
-          timer_start: new Date().toISOString(),
-          status: "in_progress"
-        })
-        .eq("id", taskId);
-
-      if (error) throw error;
-      fetchTasks();
-      toast({
-        title: "Timer started",
-        description: "Work has begun on this task"
-      });
-    } catch (error) {
-      toast({
-        variant: "destructive",
-        title: "Error starting timer",
         description: "Please try again later.",
       });
     } finally {
@@ -188,14 +176,42 @@ export default function TasksPage() {
     }
   }
 
-  async function handleStopTimer(taskId: string) {
+  async function handleStartTask(taskId: string) {
     setActionLoading(true);
     try {
       const { error } = await supabase
         .from("tasks")
         .update({
-          timer_end: new Date().toISOString(),
-          status: "completed"
+          status: "in_progress",
+          timer_start: new Date().toISOString()
+        })
+        .eq("id", taskId);
+
+      if (error) throw error;
+      fetchTasks();
+      toast({
+        title: "Task started",
+        description: "Timer has been started for this task"
+      });
+    } catch (error) {
+      toast({
+        variant: "destructive",
+        title: "Error starting task",
+        description: "Please try again later.",
+      });
+    } finally {
+      setActionLoading(false);
+    }
+  }
+
+  async function handleCompleteTask(taskId: string) {
+    setActionLoading(true);
+    try {
+      const { error } = await supabase
+        .from("tasks")
+        .update({
+          status: "completed",
+          timer_end: new Date().toISOString()
         })
         .eq("id", taskId);
 
@@ -244,21 +260,67 @@ export default function TasksPage() {
     }
   }
 
+  async function handleDeleteTask(taskId: string) {
+    if (!confirm("Are you sure you want to delete this task? This action cannot be undone.")) {
+      return;
+    }
+    
+    setActionLoading(true);
+    try {
+      const { error } = await supabase
+        .from("tasks")
+        .delete()
+        .eq("id", taskId);
+
+      if (error) throw error;
+      fetchTasks();
+      toast({
+        title: "Task deleted",
+        description: "The task has been permanently deleted"
+      });
+    } catch (error) {
+      toast({
+        variant: "destructive",
+        title: "Error deleting task",
+        description: "Please try again later.",
+      });
+    } finally {
+      setActionLoading(false);
+    }
+  }
+
   function formatDate(dateString: string | null) {
     if (!dateString) return null;
     try {
       const date = new Date(dateString);
-      return formatDistanceToNow(date, { addSuffix: true });
+      return format(date, "MMM d, yyyy h:mm a");
     } catch (e) {
       return dateString;
     }
   }
 
-  function getStatusColor(status: string, timerEnd: string | null) {
-    if (status === "completed") return "bg-green-100 text-green-800";
-    if (status === "canceled") return "bg-gray-100 text-gray-800";
-    if (status === "in_progress") return "bg-yellow-100 text-yellow-800";
+  function getTimeAgo(dateString: string | null) {
+    if (!dateString) return null;
+    try {
+      return formatDistanceToNow(new Date(dateString), { addSuffix: true });
+    } catch (e) {
+      return null;
+    }
+  }
 
+  function getStatusBadgeClass(status: string, timerEnd: string | null) {
+    if (status === "completed") {
+      return "bg-green-100 text-green-800";
+    }
+    
+    if (status === "in_progress") {
+      return "bg-yellow-100 text-yellow-800";
+    }
+    
+    if (status === "canceled") {
+      return "bg-gray-100 text-gray-800";
+    }
+    
     // Check if deadline is passed for pending tasks
     if (status === "pending" && timerEnd) {
       try {
@@ -276,232 +338,277 @@ export default function TasksPage() {
 
   return (
     <div className="container mx-auto px-4 py-8">
-      <div className="mb-8">
-        <h1 className="text-4xl font-bold">Tasks</h1>
-        <p className="text-muted-foreground mt-2">Manage and track your tasks</p>
+      <div className="flex justify-between items-center mb-8">
+        <div>
+          <h1 className="text-4xl font-bold">Tasks</h1>
+          <p className="text-muted-foreground mt-2">Manage and track your tasks</p>
+        </div>
+        <Dialog open={isAddDialogOpen} onOpenChange={setIsAddDialogOpen}>
+          <DialogTrigger asChild>
+            <Button>
+              <Plus className="h-4 w-4 mr-2" />
+              Add Task
+            </Button>
+          </DialogTrigger>
+          <DialogContent className="sm:max-w-[550px]">
+            <DialogHeader>
+              <DialogTitle>Add New Task</DialogTitle>
+              <DialogDescription>
+                Create a new task and assign it to a client.
+              </DialogDescription>
+            </DialogHeader>
+            <form onSubmit={handleAddTask}>
+              <div className="grid gap-4 py-4">
+                <div className="grid grid-cols-4 items-center gap-4">
+                  <Label htmlFor="client" className="text-right">
+                    Client
+                  </Label>
+                  <div className="col-span-3">
+                    <Select
+                      value={newTask.client_id}
+                      onValueChange={(value) => setNewTask({ ...newTask, client_id: value })}
+                    >
+                      <SelectTrigger>
+                        <SelectValue placeholder="Select a client" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {clients.map((client) => (
+                          <SelectItem key={client.id} value={client.id.toString()}>
+                            {client.name}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                </div>
+                <div className="grid grid-cols-4 items-center gap-4">
+                  <Label htmlFor="title" className="text-right">
+                    Task Title
+                  </Label>
+                  <Input
+                    id="title"
+                    value={newTask.title}
+                    onChange={(e) => setNewTask({ ...newTask, title: e.target.value })}
+                    className="col-span-3"
+                    required
+                  />
+                </div>
+                <div className="grid grid-cols-4 items-start gap-4">
+                  <Label htmlFor="description" className="text-right pt-2">
+                    Description
+                  </Label>
+                  <Textarea
+                    id="description"
+                    value={newTask.description}
+                    onChange={(e) => setNewTask({ ...newTask, description: e.target.value })}
+                    className="col-span-3"
+                    required
+                  />
+                </div>
+                <div className="grid grid-cols-4 items-center gap-4">
+                  <Label htmlFor="deadline" className="text-right">
+                    Deadline
+                  </Label>
+                  <Input
+                    id="deadline"
+                    type="date"
+                    value={newTask.deadline}
+                    onChange={(e) => setNewTask({ ...newTask, deadline: e.target.value })}
+                    className="col-span-3"
+                  />
+                </div>
+                <div className="grid grid-cols-4 items-center gap-4">
+                  <Label htmlFor="status" className="text-right">
+                    Status
+                  </Label>
+                  <div className="col-span-3">
+                    <Select
+                      value={newTask.status}
+                      onValueChange={(value: "pending" | "in_progress" | "completed" | "canceled") =>
+                        setNewTask({ ...newTask, status: value })}
+                    >
+                      <SelectTrigger>
+                        <SelectValue placeholder="Select status" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="pending">Pending</SelectItem>
+                        <SelectItem value="in_progress">In Progress</SelectItem>
+                        <SelectItem value="completed">Completed</SelectItem>
+                        <SelectItem value="canceled">Canceled</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                </div>
+              </div>
+              <DialogFooter>
+                <Button type="submit" disabled={actionLoading}>
+                  {actionLoading ? "Adding..." : "Add Task"}
+                </Button>
+              </DialogFooter>
+            </form>
+          </DialogContent>
+        </Dialog>
       </div>
 
-      <Card className="p-6 mb-8">
-        <h2 className="text-2xl font-semibold mb-4">Add New Task</h2>
-        <form onSubmit={handleAddTask} className="space-y-4">
-          <div>
-            <Label htmlFor="client">Client</Label>
-            <Select
-              value={newTask.client_id}
-              onValueChange={(value) => setNewTask({ ...newTask, client_id: value })}
-            >
-              <SelectTrigger>
-                <SelectValue placeholder="Select a client" />
-              </SelectTrigger>
-              <SelectContent>
-                {clients.map((client) => (
-                  <SelectItem key={client.id} value={client.id.toString()}>
-                    {client.name}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
-          <div>
-            <Label htmlFor="title">Task Title</Label>
-            <Input
-              id="title"
-              value={newTask.title}
-              onChange={(e) => setNewTask({ ...newTask, title: e.target.value })}
-              required
-            />
-          </div>
-          <div>
-            <Label htmlFor="description">Description</Label>
-            <Textarea
-              id="description"
-              value={newTask.description}
-              onChange={(e) => setNewTask({ ...newTask, description: e.target.value })}
-              required
-            />
-          </div>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <div>
-              <Label htmlFor="deadline">Deadline (Optional)</Label>
-              <Input
-                id="deadline"
-                type="datetime-local"
-                value={newTask.deadline}
-                onChange={(e) => setNewTask({ ...newTask, deadline: e.target.value })}
-              />
-            </div>
-            <div>
-              <Label htmlFor="status">Initial Status</Label>
-              <Select
-                value={newTask.status}
-                onValueChange={(value: "pending" | "in_progress" | "completed" | "canceled") =>
-                  setNewTask({ ...newTask, status: value })
-                }
-              >
-                <SelectTrigger>
-                  <SelectValue placeholder="Select status" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="pending">Pending</SelectItem>
-                  <SelectItem value="in_progress">In Progress</SelectItem>
-                  <SelectItem value="completed">Completed</SelectItem>
-                  <SelectItem value="canceled">Canceled</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-          </div>
-          <Button type="submit" disabled={actionLoading}>
-            {actionLoading ? <><Loader2 className="h-4 w-4 mr-1 animate-spin" /> Adding...</> : "Add Task"}
-          </Button>
-        </form>
+      {/* Task filters and sorting options */}
+      <Card className="p-4 mb-6">
+        <div className="flex flex-wrap gap-4">
+          <Select
+            defaultValue="all"
+            onValueChange={(value) => {
+              // Filter tasks by status (this would be implemented in a real app)
+              console.log("Filter by status:", value);
+            }}
+          >
+            <SelectTrigger className="w-[180px]">
+              <SelectValue placeholder="Filter by status" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">All Statuses</SelectItem>
+              <SelectItem value="pending">Pending</SelectItem>
+              <SelectItem value="in_progress">In Progress</SelectItem>
+              <SelectItem value="completed">Completed</SelectItem>
+              <SelectItem value="canceled">Canceled</SelectItem>
+            </SelectContent>
+          </Select>
+          
+          <Select
+            defaultValue="newest"
+            onValueChange={(value) => {
+              // Sort tasks (this would be implemented in a real app)
+              console.log("Sort by:", value);
+            }}
+          >
+            <SelectTrigger className="w-[180px]">
+              <SelectValue placeholder="Sort by" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="newest">Newest First</SelectItem>
+              <SelectItem value="oldest">Oldest First</SelectItem>
+              <SelectItem value="deadline">Deadline</SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
       </Card>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-        {tasks.map((task) => (
-          <Card key={task.id} className="p-6 relative overflow-hidden">
-            {/* Task Header */}
-            <div className="mb-4 flex justify-between items-start">
-              <h3 className="text-xl font-semibold">{task.title}</h3>
-              <Link href={`/tasks/${task.id}`}>
-                <Button variant="ghost" size="sm" className="text-xs">
-                  <Edit className="h-3 w-3 mr-1" /> Edit
-                </Button>
-              </Link>
-            </div>
-
-            {/* Client Name */}
-            <p className="text-sm text-muted-foreground mb-3">
-              Client: {task.clients?.name || "Unknown"}
-            </p>
-
-            {/* Description */}
-            <p className="text-muted-foreground mb-4 line-clamp-2">{task.description}</p>
-
-            {/* Status and Deadline Section */}
-            <div className="space-y-3 mb-4">
-              {/* Status */}
-              <div className="flex items-center justify-between">
-                <span className="text-sm text-muted-foreground">Status:</span>
-                <span className={`px-2 py-1 rounded-full text-xs ${getStatusColor(task.status, task.timer_end)}`}>
-                  {task.status.replace("_", " ")}
-                </span>
+      {loading ? (
+        <div className="flex justify-center items-center py-12">
+          <div className="flex flex-col items-center">
+            <Loader2 className="h-8 w-8 animate-spin text-primary mb-2" />
+            <p className="text-muted-foreground">Loading tasks...</p>
+          </div>
+        </div>
+      ) : tasks.length === 0 ? (
+        <div className="flex justify-center items-center py-12">
+          <div className="flex flex-col items-center text-center max-w-md">
+            <ClipboardList className="h-12 w-12 text-muted-foreground opacity-50 mb-2" />
+            <h3 className="text-lg font-medium mb-1">No tasks found</h3>
+            <p className="text-muted-foreground mb-4">You haven't created any tasks yet. Get started by adding your first task.</p>
+            <Button onClick={() => setIsAddDialogOpen(true)}>
+              <Plus className="h-4 w-4 mr-2" />
+              Add Your First Task
+            </Button>
+          </div>
+        </div>
+      ) : (
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+          {tasks.map((task) => (
+            <Card key={task.id} className="p-6 relative overflow-hidden">
+              {/* Status indicator */}
+              <div className={`absolute top-0 right-0 px-2 py-1 text-xs font-medium rounded-bl-md ${getStatusBadgeClass(task.status, task.timer_end)}`}>
+                {task.status.charAt(0).toUpperCase() + task.status.slice(1)}
               </div>
 
-              {/* Deadline */}
-              {task.timer_end && (
-                <div className="flex items-center justify-between">
-                  <span className="text-sm text-muted-foreground flex items-center">
-                    <CalendarClock className="h-3 w-3 mr-1" /> Deadline:
-                  </span>
-                  <span className={`text-xs font-medium ${isPast(new Date(task.timer_end)) && task.status !== "completed" && task.status !== "canceled" ? "text-red-600" : ""}`}>
-                    {format(new Date(task.timer_end), "PPp")}
-                  </span>
-                </div>
-              )}
+              <div className="mb-4">
+                <h3 className="text-xl font-semibold mb-1">{task.title}</h3>
+                <p className="text-sm text-muted-foreground">
+                  {task.clients?.name || "No client"}
+                </p>
+              </div>
 
-              {/* Timer */}
-              {task.timer_start && (
-                <div className="flex items-center justify-between">
-                  <span className="text-sm text-muted-foreground flex items-center">
-                    <Clock className="h-3 w-3 mr-1" /> Started:
-                  </span>
-                  <span className="text-xs font-medium">
-                    {formatDate(task.timer_start)}
-                  </span>
-                </div>
-              )}
+              <p className="text-sm mb-4 line-clamp-3">{task.description}</p>
 
-              {/* Completed Time */}
-              {task.timer_end && (
-                <div className="flex items-center justify-between">
-                  <span className="text-sm text-muted-foreground flex items-center">
-                    <CheckCircle2 className="h-3 w-3 mr-1" /> {task.status === "canceled" ? "Canceled:" : "Completed:"}
-                  </span>
-                  <span className="text-xs font-medium">
-                    {formatDate(task.timer_end)}
-                  </span>
-                </div>
-              )}
-
-              {/* Duration for completed tasks */}
-              {task.status === "completed" && task.timer_start && task.timer_end && (
-                <div className="flex items-center justify-between">
-                  <span className="text-sm text-muted-foreground">Duration:</span>
-                  <span className="text-xs font-medium">
-                    {(() => {
-                      try {
-                        const start = new Date(task.timer_start).getTime();
-                        const end = new Date(task.timer_end).getTime();
-                        const durationMs = end - start;
-
-                        const hours = Math.floor(durationMs / (1000 * 60 * 60));
-                        const minutes = Math.floor((durationMs % (1000 * 60 * 60)) / (1000 * 60));
-
-                        return `${hours}h ${minutes}m`;
-                      } catch (e) {
-                        return "Unable to calculate";
-                      }
-                    })()}
-                  </span>
-                </div>
-              )}
-            </div>
-
-            {/* Action Buttons */}
-            <div className="flex items-center justify-between mt-4">
-              {task.status !== "completed" && task.status !== "canceled" ? (
-                !task.timer_start ? (
-                  <Button
-                    onClick={() => handleStartTimer(task.id)}
-                    size="sm"
-                    disabled={actionLoading}
-                    className="w-full"
-                  >
-                    {actionLoading ? <Loader2 className="h-4 w-4 mr-1 animate-spin" /> : <Play className="h-4 w-4 mr-1" />}
-                    Start Work
-                  </Button>
-                ) : !task.timer_end ? (
-                  <div className="flex w-full gap-2">
-                    <Button
-                      onClick={() => handleStopTimer(task.id)}
-                      size="sm"
-                      variant="default"
-                      disabled={actionLoading}
-                      className="flex-1"
-                    >
-                      {actionLoading ? <Loader2 className="h-4 w-4 mr-1 animate-spin" /> : <CheckCircle2 className="h-4 w-4 mr-1" />}
-                      Complete
-                    </Button>
-                    <Button
-                      onClick={() => handleCancelTask(task.id)}
-                      size="sm"
-                      variant="destructive"
-                      disabled={actionLoading}
-                      className="flex-1"
-                    >
-                      {actionLoading ? <Loader2 className="h-4 w-4 mr-1 animate-spin" /> : <XCircle className="h-4 w-4 mr-1" />}
-                      Cancel
-                    </Button>
+              <div className="space-y-2 mb-4">
+                {task.timer_end && (
+                  <div className="flex items-center text-sm">
+                    <CalendarClock className="h-4 w-4 mr-2 text-muted-foreground" />
+                    <span>
+                      Due: {formatDate(task.timer_end)}
+                      {isPast(new Date(task.timer_end)) && task.status === "pending" && (
+                        <span className="text-red-500 ml-1">Overdue</span>
+                      )}
+                    </span>
                   </div>
-                ) : null
-              ) : (
-                <Link href={`/tasks/${task.id}`} className="w-full">
-                  <Button variant="outline" size="sm" className="w-full">
-                    View Details <ArrowRight className="h-3 w-3 ml-1" />
+                )}
+                {task.timer_start && (
+                  <div className="flex items-center text-sm">
+                    <Clock className="h-4 w-4 mr-2 text-muted-foreground" />
+                    <span>Started: {getTimeAgo(task.timer_start)}</span>
+                  </div>
+                )}
+              </div>
+
+              <div className="flex flex-wrap gap-2 mt-4">
+                <Link href={`/tasks/${task.id}`}>
+                  <Button variant="outline" size="sm">
+                    <Edit className="h-4 w-4 mr-1" />
+                    Details
                   </Button>
                 </Link>
-              )}
-            </div>
 
-            {/* Deadline Banner for Overdue Tasks */}
-            {task.timer_end && task.status === "pending" && isPast(new Date(task.timer_end)) && (
-              <div className="absolute top-0 left-0 right-0 bg-red-500 text-white text-xs py-1 px-2 text-center">
-                Overdue
+                {task.status === "pending" && (
+                  <Button 
+                    variant="outline" 
+                    size="sm" 
+                    onClick={() => handleStartTask(task.id)}
+                    disabled={actionLoading}
+                  >
+                    <Play className="h-4 w-4 mr-1" />
+                    Start
+                  </Button>
+                )}
+
+                {task.status === "in_progress" && (
+                  <Button 
+                    variant="outline" 
+                    size="sm" 
+                    onClick={() => handleCompleteTask(task.id)}
+                    disabled={actionLoading}
+                    className="text-green-600"
+                  >
+                    <CheckCircle2 className="h-4 w-4 mr-1" />
+                    Complete
+                  </Button>
+                )}
+
+                {(task.status === "pending" || task.status === "in_progress") && (
+                  <Button 
+                    variant="outline" 
+                    size="sm" 
+                    onClick={() => handleCancelTask(task.id)}
+                    disabled={actionLoading}
+                    className="text-red-600"
+                  >
+                    <XCircle className="h-4 w-4 mr-1" />
+                    Cancel
+                  </Button>
+                )}
+                
+                <Button 
+                  variant="outline" 
+                  size="sm" 
+                  onClick={() => handleDeleteTask(task.id)}
+                  disabled={actionLoading}
+                  className="text-red-600"
+                >
+                  <Trash2 className="h-4 w-4 mr-1" />
+                  Delete
+                </Button>
               </div>
-            )}
-          </Card>
-        ))}
-      </div>
+            </Card>
+          ))}
+        </div>
+      )}
     </div>
   );
 }

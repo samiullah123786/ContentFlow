@@ -12,6 +12,7 @@ import {
   DollarSign,
   Menu,
   X,
+  Briefcase,
 } from "lucide-react";
 
 const Navigation = () => {
@@ -35,6 +36,11 @@ const Navigation = () => {
       icon: ClipboardList,
     },
     {
+      href: "/works",
+      label: "Work",
+      icon: Briefcase,
+    },
+    {
       href: "/finance",
       label: "Finance",
       icon: DollarSign,
@@ -48,7 +54,7 @@ const Navigation = () => {
           <LayoutDashboard className="h-6 w-6" />
           <span className="font-bold text-xl">Content Flow</span>
         </Link>
-        
+
         {/* Mobile menu button */}
         <Button
           variant="ghost"
