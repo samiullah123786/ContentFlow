@@ -317,7 +317,7 @@ export default function FinancePage() {
           </DialogTrigger>
           <DialogContent className="sm:max-w-[550px]">
             <DialogHeader>
-              <DialogTitle>{editingFinance ? "Edit Finance Record" : "Add New Record"}</DialogTitle>
+              <DialogTitle>{editingFinance ? "Edit Finance Record" : "Add New Finance Record"}</DialogTitle>
               <DialogDescription>
                 {editingFinance ? "Update the finance record details." : "Create a new finance record by filling out the form below."}
               </DialogDescription>
@@ -419,9 +419,9 @@ export default function FinancePage() {
               </div>
               <DialogFooter>
                 {editingFinance && (
-                  <Button 
-                    type="button" 
-                    variant="outline" 
+                  <Button
+                    type="button"
+                    variant="outline"
                     onClick={() => {
                       setEditingFinance(null);
                       setNewFinance({
@@ -499,7 +499,7 @@ export default function FinancePage() {
       {/* Finance records list */}
       <div className="space-y-4">
         <h2 className="text-2xl font-semibold">Finance Records</h2>
-        
+
         {loading ? (
           <div className="flex justify-center py-8">
             <div className="animate-spin h-8 w-8 border-4 border-primary border-t-transparent rounded-full"></div>
@@ -507,8 +507,8 @@ export default function FinancePage() {
         ) : finances.length === 0 ? (
           <div className="text-center py-8">
             <p className="text-muted-foreground">No finance records found. Add your first record to get started.</p>
-            <Button 
-              onClick={() => setIsAddDialogOpen(true)} 
+            <Button
+              onClick={() => setIsAddDialogOpen(true)}
               className="mt-4"
               variant="outline"
             >
@@ -533,39 +533,39 @@ export default function FinancePage() {
                     {finance.status.charAt(0).toUpperCase() + finance.status.slice(1)}
                   </div>
                 </div>
-                
+
                 <div className="space-y-2 text-sm text-muted-foreground mb-4">
                   <div className="flex items-center justify-between">
                     <span>Type:</span>
                     <span className="font-medium text-foreground capitalize">{finance.type}</span>
                   </div>
-                  
+
                   {finance.due_date && (
                     <div className="flex items-center justify-between">
                       <span>Due Date:</span>
                       <span className="font-medium text-foreground">{formatDate(finance.due_date)}</span>
                     </div>
                   )}
-                  
+
                   <div className="flex items-center justify-between">
                     <span>Created:</span>
                     <span className="font-medium text-foreground">{formatDate(finance.created_at)}</span>
                   </div>
                 </div>
-                
+
                 <div className="flex gap-2">
-                  <Button 
-                    variant="outline" 
-                    size="sm" 
+                  <Button
+                    variant="outline"
+                    size="sm"
                     onClick={() => handleEditFinance(finance)}
                     className="flex-1"
                   >
                     <Edit className="h-4 w-4 mr-1" />
                     Edit
                   </Button>
-                  <Button 
-                    variant="outline" 
-                    size="sm" 
+                  <Button
+                    variant="outline"
+                    size="sm"
                     onClick={() => handleDeleteFinance(finance.id)}
                     className="flex-1 text-red-600"
                   >
