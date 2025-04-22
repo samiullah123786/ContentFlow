@@ -208,9 +208,79 @@ export default function ClientsPage() {
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
           {clients.map((client) => (
-            <Card key={client.id} className="p-6">
-              <div className="flex justify-between items-start mb-2">
-                <h3 className="text-xl font-semibold">{client.name}</h3>
+            <Card key={client.id} className="overflow-hidden">
+              <div className="bg-primary/5 p-4 border-b">
+                <div className="flex justify-between items-start">
+                  <h3 className="text-xl font-semibold">{client.name}</h3>
+                  <span className={`px-2 py-1 rounded-full text-xs ${
+                    client.status === "active" ? "bg-green-100 text-green-800" :
+                    client.status === "inactive" ? "bg-yellow-100 text-yellow-800" :
+                    "bg-red-100 text-red-800"
+                  }`}>
+                    {client.status || "Unknown"}
+                  </span>
+                </div>
+                <p className="text-muted-foreground text-sm mt-1">{client.email || "No email provided"}</p>
+              </div>
+
+              <div className="p-4 space-y-4">
+                {/* Client Goal Summary */}
+                {client.client_goal && (
+                  <div className="space-y-1">
+                    <h4 className="text-sm font-medium">Goal</h4>
+                    <p className="text-sm text-muted-foreground line-clamp-2">
+                      {client.client_goal}
+                    </p>
+                  </div>
+                )}
+
+                {/* Budget Summary */}
+                {client.budget && typeof client.budget === 'object' && (
+                  <div className="space-y-1">
+                    <h4 className="text-sm font-medium">Budget</h4>
+                    <p className="text-sm font-semibold">
+                      {new Intl.NumberFormat('en-US', {
+                        style: 'currency',
+                        currency: client.budget.currency || 'USD'
+                      }).format(client.budget.total || 0)}
+                    </p>
+                  </div>
+                )}
+
+                {/* Hired People Summary */}
+                {client.hired_people && Array.isArray(client.hired_people) && client.hired_people.length > 0 && (
+                  <div className="space-y-1">
+                    <h4 className="text-sm font-medium">Team</h4>
+                    <div className="flex flex-wrap gap-1">
+                      {client.hired_people.slice(0, 3).map((person: any, index: number) => (
+                        <span key={index} className="text-xs bg-muted px-2 py-1 rounded-full">
+                          {person.name}
+                        </span>
+                      ))}
+                      {client.hired_people.length > 3 && (
+                        <span className="text-xs bg-muted px-2 py-1 rounded-full">
+                          +{client.hired_people.length - 3} more
+                        </span>
+                      )}
+                    </div>
+                  </div>
+                )}
+
+                {/* Timeline Summary */}
+                {client.timeline && Array.isArray(client.timeline) && client.timeline.length > 0 && (
+                  <div className="space-y-1">
+                    <h4 className="text-sm font-medium">Next Deadline</h4>
+                    <p className="text-sm text-muted-foreground">
+                      {client.timeline[0].date && new Date(client.timeline[0].date).toLocaleDateString('en-US', {
+                        month: 'short',
+                        day: 'numeric'
+                      })}: {client.timeline[0].title}
+                    </p>
+                  </div>
+                )}
+              </div>
+
+              <div className="border-t p-4 flex justify-between items-center">
                 <div className="flex gap-2">
                   <Button
                     variant="ghost"
@@ -228,16 +298,6 @@ export default function ClientsPage() {
                     <Trash2 className="h-3 w-3 mr-1" /> Delete
                   </Button>
                 </div>
-              </div>
-              <p className="text-muted-foreground mb-4">{client.email || "No email provided"}</p>
-              <div className="flex items-center justify-between">
-                <span className={`px-2 py-1 rounded-full text-sm ${
-                  client.status === "active" ? "bg-green-100 text-green-800" :
-                  client.status === "inactive" ? "bg-yellow-100 text-yellow-800" :
-                  "bg-red-100 text-red-800"
-                }`}>
-                  {client.status || "Unknown"}
-                </span>
                 <Link href={`/clients/${client.id}`}>
                   <Button variant="outline" size="sm">View Details</Button>
                 </Link>

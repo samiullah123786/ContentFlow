@@ -13,6 +13,7 @@ import {
   Menu,
   X,
   Briefcase,
+  UserCircle,
 } from "lucide-react";
 
 const Navigation = () => {
@@ -44,6 +45,11 @@ const Navigation = () => {
       href: "/finance",
       label: "Finance",
       icon: DollarSign,
+    },
+    {
+      href: "/team",
+      label: "Team",
+      icon: UserCircle,
     },
   ];
 

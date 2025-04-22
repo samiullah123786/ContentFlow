@@ -7,14 +7,18 @@ type Props = {
 };
 
 // This is a server component that will be rendered at build time
-export default function ClientDetailsPage({ params }: Props) {
-  return <ClientDetailsClient id={params.id} />;
+export default async function ClientDetailsPage({ params }: Props) {
+  // In Next.js 13+, we need to properly handle params in an async context
+  const id = params?.id;
+  return <ClientDetailsClient id={id} />;
 }
 
 // Generate metadata for the page
 export async function generateMetadata({ params }: Props): Promise<Metadata> {
+  // Extract the id from params to avoid the async params warning
+  const id = params?.id;
   return {
-    title: `Client Details - ${params.id}`,
+    title: `Client Details - ${id}`,
     description: "View and edit client details",
   };
 }
